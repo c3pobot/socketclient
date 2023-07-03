@@ -1,49 +1,48 @@
 'use strict'
-module.exports = class Socket{
-  constructor(opt){
-    this.io = require('socket.io-client')
-    this.type = opt.type
-    this.id = opt.id
-    this.debugMsg = opt.debugMsg
-    this.socket =  this.io(opt.url, {transports: ['websocket']})
-    this.socket.on('connect', ()=>{
-      console.log('Socket.io is connected to socket server...')
-    })
-    this.cmds = opt.cmds
-    this.socket.on('disconnect', (reason)=>{
-      if(this.debugMsg) console.log('Socket.io connection to server was disconnected for '+reason)
-    })
-    this.socket.on('request', async(cmd, obj, content, callback)=>{
-      try{
-        if(this.cmds && this.cmds[cmd]){
-          const status = await this.cmds[cmd](obj, content)
-          if(callback) callback(status)
-        }
-      }catch(e){
-        if(callback) callback({status: 'error'})
-      }
-    })
+const BOT_BRIDGE_URI = process.env.BOT_BRIDGE_URI
+const POD_NAME = process.env.POD_NAME
+const SOCKET_EMIT_TIMEOUT = process.env.SOCKET_EMIT_TIMEOUT || 10000
+const SOCKET_IDENTIFIY = process.env.SOCKET_IDENTIFIY || false
+const io = require('socket.io-client')
+let socket = io(BOT_BRIDGE_URI, {transports: ['websocket']}), notify = true
+socket.on('connect', ()=>{
+  if(SOCKET_IDENTIFIY) sendSocketIdentity()
+  if(notify){
+    notify = false
+    console.log(POD_NAME+' socket.io is connected to socket server...')
   }
-  call (cmd, obj, content) {
-    return new Promise((resolve)=>{
-      try{
-        this.socket.emit('request', cmd, obj, content, (res)=>{
-          resolve(res)
-        })
-      }catch(e){
-        console.error(e)
-        resolve()
-      }
-    })
+
+})
+socket.on('disconnect', reason=>{
+  console.log(POD_NAME+' socket.io is diconnected from socket server...')
+})
+const sendSocketIdentity = async()=>{
+  try{
+    let res = await SocketEmit('request', 'identify', {podName: POD_NAME})
+    if(!res || res?.status !== 'ok') setTimeout(sendSocketIdentity, 5000)
+  }catch(e){
+    console.error(e);
+    setTimeout(sendSocketIdentity, 5000)
   }
-  send (cmd, obj, content, callback) {
+}
+const SocketEmit = ( type = 'request', cmd, obj = {} )=>{
+  return new Promise((resolve, reject)=>{
     try{
-      this.socket.emit('request', cmd, obj, content, (res)=>{
-        if(res && res.status != 'ok') console.log(res.status)
-        if(callback) callback(res)
+      if(!socket || !socket?.connected) reject('Socket Error: connection not available')
+      socket.timeout(SOCKET_EMIT_TIMEOUT).emit(type, cmd, obj, (err, res)=>{
+        if(err) reject(`Socket Error: ${err.message || err}`)
+        resolve(res)
       })
     }catch(e){
-      console.error(e);
+      reject(e.message)
     }
+  })
+}
+module.exports.socket = socket
+module.exports.call = async(cmd, obj = {})=>{
+  try{
+    return await SocketEmit('request', cmd, obj)
+  }catch(e){
+    throw(e)
   }
 }
