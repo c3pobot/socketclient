@@ -5,7 +5,7 @@ const SOCKET_EMIT_TIMEOUT = process.env.SOCKET_EMIT_TIMEOUT || 10000
 const SOCKET_IDENTIFIY = process.env.SOCKET_IDENTIFIY || false
 const io = require('socket.io-client')
 const StartSocket = ()=>{
-  let socket = io(WEBSOCKET_URI, {transports: ['websocket']}), notify = true
+  socket = io(WEBSOCKET_URI, {transports: ['websocket']}), notify = true
   socket.on('connect', ()=>{
     if(SOCKET_IDENTIFIY) sendSocketIdentity()
     if(notify){
