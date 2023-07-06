@@ -1,21 +1,23 @@
 'use strict'
-const BOT_BRIDGE_URI = process.env.BOT_BRIDGE_URI
+let WEBSOCKET_URI, socket
 const POD_NAME = process.env.POD_NAME
 const SOCKET_EMIT_TIMEOUT = process.env.SOCKET_EMIT_TIMEOUT || 10000
 const SOCKET_IDENTIFIY = process.env.SOCKET_IDENTIFIY || false
 const io = require('socket.io-client')
-let socket = io(BOT_BRIDGE_URI, {transports: ['websocket']}), notify = true
-socket.on('connect', ()=>{
-  if(SOCKET_IDENTIFIY) sendSocketIdentity()
-  if(notify){
-    notify = false
-    console.log(POD_NAME+' socket.io is connected to socket server...')
-  }
+const StartSocket = ()=>{
+  let socket = io(WEBSOCKET_URI, {transports: ['websocket']}), notify = true
+  socket.on('connect', ()=>{
+    if(SOCKET_IDENTIFIY) sendSocketIdentity()
+    if(notify){
+      notify = false
+      console.log(POD_NAME+' socket.io is connected to socket server...')
+    }
+  })
+  socket.on('disconnect', reason=>{
+    console.log(POD_NAME+' socket.io is diconnected from socket server...')
+  })
+}
 
-})
-socket.on('disconnect', reason=>{
-  console.log(POD_NAME+' socket.io is diconnected from socket server...')
-})
 const sendSocketIdentity = async()=>{
   try{
     let res = await SocketEmit('request', 'identify', {podName: POD_NAME})
@@ -37,6 +39,11 @@ const SocketEmit = ( type = 'request', cmd, obj = {} )=>{
       reject(e.message)
     }
   })
+}
+module.exports.start = (uri)=>{
+  WEBSOCKET_URI = uri
+  StartSocket()
+  return true
 }
 module.exports.socket = socket
 module.exports.call = async(cmd, obj = {})=>{
